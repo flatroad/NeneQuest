@@ -1,9 +1,22 @@
 ﻿#include <Windows.h>
+#include <d2d1.h>
+#pragma comment(lib, "d2d1.lib")
+
+ID2D1Factory* globalD2DFactory = nullptr;
+ID2D1HwndRenderTarget* globalD2DRenderTarget = nullptr;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_PAINT:
+        globalD2DRenderTarget->BeginDraw();
+        globalD2DRenderTarget->Clear(
+            D2D1::ColorF(D2D1::ColorF::CornflowerBlue)
+        );
+        globalD2DRenderTarget->EndDraw();
+        ValidateRect(hWnd, nullptr);
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -20,6 +33,25 @@ int WINAPI wWinMain(
     _In_ int nShowCmd
 )
 {
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr))
+    {
+        return (0);
+    }
+
+    hr = D2D1CreateFactory(
+        D2D1_FACTORY_TYPE_SINGLE_THREADED,
+        __uuidof(ID2D1Factory),
+        nullptr,
+        reinterpret_cast<void**>(&globalD2DFactory)
+    );
+
+    if (FAILED(hr))
+    {
+        CoUninitialize();
+        return (0);
+    }
+
     const WCHAR CLASS_NAME[] = L"NeneQuestWindowClass";
     const WCHAR TITLE[] = L"Nene Quest";
     WNDCLASSW WndClass = {};
@@ -40,6 +72,25 @@ int WINAPI wWinMain(
 
     if (hWnd == nullptr)
     {
+        globalD2DFactory->Release();
+        CoUninitialize();
+        return (0);
+    }
+
+    RECT rc;
+    GetClientRect(hWnd, &rc); // 창의 클라이언트 영역 크기.
+
+    hr = globalD2DFactory->CreateHwndRenderTarget(
+        D2D1::RenderTargetProperties(),
+        D2D1::HwndRenderTargetProperties(
+            hWnd,
+            D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top)
+        ),
+        &globalD2DRenderTarget
+    );
+
+    if (FAILED(hr))
+    {
         return (0);
     }
 
@@ -52,5 +103,8 @@ int WINAPI wWinMain(
         DispatchMessage(&msg); // 메시지를 해당 창의 WndProc로 전달.
     }
 
+    globalD2DRenderTarget->Release();
+    globalD2DFactory->Release();
+    CoUninitialize();
     return ((int)msg.wParam);
 }
